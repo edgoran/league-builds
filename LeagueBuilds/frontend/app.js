@@ -130,7 +130,7 @@ function renderChampionGrid(champions) {
     championGrid.querySelectorAll(".champion-card").forEach(card => {
         card.addEventListener("click", () => {
             previousView = "search";
-            showChampionView(card.dataset.champion, card.dataset.id);
+            showChampionView(card.dataset.id, card.dataset.id);
         });
     });
 }
@@ -397,7 +397,7 @@ function renderMasteryChampions(champions) {
     masteryChampions.querySelectorAll(".mastery-card").forEach(card => {
         card.addEventListener("click", () => {
             previousView = "player";
-            showChampionView(card.dataset.champion, card.dataset.id, currentPlayerName, currentPlayerTag);
+            showChampionView(card.dataset.id, card.dataset.id, currentPlayerName, currentPlayerTag);
         });
     });
 }
