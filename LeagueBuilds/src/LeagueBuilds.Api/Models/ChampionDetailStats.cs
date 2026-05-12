@@ -9,6 +9,7 @@ public class ChampionDetailStats
     public int MasteryPoints { get; set; }
     public string MasteryPointsFormatted { get; set; } = string.Empty;
     public int GamesPlayed { get; set; }
+    public int GamesAnalysed { get; set; }  // Total matches checked
     public int Wins { get; set; }
     public int Losses { get; set; }
     public double WinRate { get; set; }

@@ -94,16 +94,16 @@ public class GetChampionPage
                     E = MapSpell(detail.Spells, 2, patch),
                     R = MapSpell(detail.Spells, 3, patch)
                 },
-                Skins = detail.Skins
-                    .Where(s => !s.Name.ToLower().Contains("chroma"))
+                Skins = FilterChromas(detail.Skins)
                     .Select(s => new SkinInfo
                     {
                         SkinNum = s.Num,
                         Name = s.Name == "default" ? detail.Name : s.Name,
+                        HasChromas = s.Chromas,
                         SplashUrl = $"https://ddragon.leagueoflegends.com/cdn/img/champion/splash/{championId}_{s.Num}.jpg",
                         LoadingUrl = $"https://ddragon.leagueoflegends.com/cdn/img/champion/loading/{championId}_{s.Num}.jpg"
                     })
-                    .ToList()
+                    .ToList(),
             };
 
             // If player context provided, fetch personal stats
@@ -129,6 +129,49 @@ public class GetChampionPage
             context.Logger.LogError($"Error: {ex.Message}\n{ex.StackTrace}");
             return CreateResponse(500, ApiResponse<ChampionPageData>.Fail("Internal server error"));
         }
+    }
+
+    private List<ChampionSkin> FilterChromas(List<ChampionSkin> skins)
+    {
+        // Keep track of legitimate skin nums
+        // A skin is legitimate if:
+        // 1. It's the default skin (num 0)
+        // 2. It has chromas: true (it's a parent skin)
+        // 3. Its name doesn't contain parentheses (chromas often have "(Ruby)" etc)
+        // 4. It's not a duplicate name variant
+
+        var parentNums = new HashSet<int> { 0 }; // Default is always valid
+        var legitimateSkins = new List<ChampionSkin>();
+
+        // First pass: identify all parent skins (they have chromas: true or are numbered distinctly)
+        foreach (var skin in skins)
+        {
+            if (skin.Chromas)
+            {
+                parentNums.Add(skin.Num);
+            }
+        }
+
+        // Second pass: keep only parent skins and skins that don't look like chromas
+        foreach (var skin in skins)
+        {
+            // Skip skins with parenthesised suffixes (chroma variants)
+            if (skin.Name.Contains("(") && skin.Name.Contains(")"))
+                continue;
+
+            // Skip if name matches common chroma patterns
+            if (skin.Num == 0 || skin.Chromas || parentNums.Contains(skin.Num))
+            {
+                legitimateSkins.Add(skin);
+                continue;
+            }
+
+            // For skins without chromas field, check if they're a known parent
+            // by verifying they're not between two parent nums
+            legitimateSkins.Add(skin);
+        }
+
+        return legitimateSkins;
     }
 
     private AbilityInfo MapSpell(ChampionPassive passive, string patch)

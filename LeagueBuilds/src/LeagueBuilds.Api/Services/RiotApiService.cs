@@ -104,6 +104,38 @@ public class RiotApiService
         return await response.Content.ReadFromJsonAsync<List<string>>(JsonOptions) ?? new();
     }
 
+    // Get match IDs with pagination
+    public async Task<List<string>> GetMatchIdsPagedAsync(string puuid, int totalCount = 100)
+    {
+        var allMatchIds = new List<string>();
+        var batchSize = 100; // Riot max per call
+        var start = 0;
+
+        while (allMatchIds.Count < totalCount)
+        {
+            var remaining = totalCount - allMatchIds.Count;
+            var count = Math.Min(batchSize, remaining);
+
+            var url = $"https://{_region}.api.riotgames.com/lol/match/v5/matches/by-puuid/{puuid}/ids?start={start}&count={count}";
+
+            var request = new HttpRequestMessage(HttpMethod.Get, url);
+            request.Headers.Add("X-Riot-Token", _apiKey);
+
+            var response = await _httpClient.SendAsync(request);
+            if (!response.IsSuccessStatusCode) break;
+
+            var batch = await response.Content.ReadFromJsonAsync<List<string>>(JsonOptions) ?? new();
+            if (batch.Count == 0) break;
+
+            allMatchIds.AddRange(batch);
+            start += batch.Count;
+
+            await Task.Delay(50);
+        }
+
+        return allMatchIds;
+    }
+
     // Get match details
     public async Task<RiotMatchResponse?> GetMatchAsync(string matchId)
     {
@@ -203,6 +235,27 @@ public class RiotApiService
         if (!response.IsSuccessStatusCode) return null;
 
         return await response.Content.ReadFromJsonAsync<ChampionMastery>(JsonOptions);
+    }
+
+    // Get ranked stats for a player
+    public async Task<List<RankedEntry>> GetRankedStatsAsync(string puuid)
+    {
+        // First get summoner ID from PUUID
+        var summoner = await GetSummonerByPuuidAsync(puuid);
+        if (summoner == null) return new();
+
+        var url = $"https://{_platform}.api.riotgames.com/lol/league/v4/entries/by-puuid/{puuid}";
+        var request = new HttpRequestMessage(HttpMethod.Get, url);
+        request.Headers.Add("X-Riot-Token", _apiKey);
+
+        var response = await _httpClient.SendAsync(request);
+        if (!response.IsSuccessStatusCode)
+        {
+            Console.WriteLine($"Ranked stats fetch failed: {response.StatusCode}");
+            return new();
+        }
+
+        return await response.Content.ReadFromJsonAsync<List<RankedEntry>>(JsonOptions) ?? new();
     }
 }
 
@@ -312,8 +365,8 @@ public class ChampionSkin
 {
     public int Num { get; set; }
     public string Name { get; set; } = string.Empty;
+    public bool Chromas { get; set; }
 }
-
 public class ChampionRecommended
 {
     public string Map { get; set; } = string.Empty;
@@ -432,4 +485,14 @@ public class ChampionMastery
     public int ChampionId { get; set; }
     public int ChampionLevel { get; set; }
     public int ChampionPoints { get; set; }
+}
+
+public class RankedEntry
+{
+    public string QueueType { get; set; } = string.Empty;
+    public string Tier { get; set; } = string.Empty;
+    public string Rank { get; set; } = string.Empty;
+    public int LeaguePoints { get; set; }
+    public int Wins { get; set; }
+    public int Losses { get; set; }
 }

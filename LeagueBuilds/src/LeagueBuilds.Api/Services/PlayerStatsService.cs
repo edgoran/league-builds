@@ -19,8 +19,14 @@ public class PlayerStatsService
         var account = await _riotApi.GetSummonerByNameAsync(gameName, tagLine);
         if (account == null) return null;
 
-        // Get summoner info (profile icon, level)
+        // Get summoner info
         var summoner = await _riotApi.GetSummonerByPuuidAsync(account.Puuid);
+
+        // Get champion mastery (top 10)
+        var masteryList = await _riotApi.GetChampionMasteryAsync(account.Puuid);
+
+        // Get ranked stats
+        var rankedEntries = await _riotApi.GetRankedStatsAsync(account.Puuid);
 
         // Get recent matches
         var matchIds = await _riotApi.GetMatchIdsAsync(account.Puuid, count: 20, type: null);
@@ -45,7 +51,37 @@ public class PlayerStatsService
             .ToList();
 
         // Calculate per-champion stats from recent matches
-        var topChampions = CalculateChampionStats(recentMatches, championData, patch);
+        var recentChampionStats = CalculateChampionStats(recentMatches, championData, patch);
+
+        // Build mastery-based top champions
+        var topMasteryChampions = masteryList
+            .Take(10)
+            .Select(m =>
+            {
+                var champion = championData.Values
+                    .FirstOrDefault(c => c.Key == m.ChampionId.ToString());
+
+                // Find recent stats for this champion if available
+                var recentStats = recentChampionStats
+                    .FirstOrDefault(s => champion != null && s.ChampionName.Equals(champion.Name, StringComparison.OrdinalIgnoreCase));
+
+                return new MasteryChampionInfo
+                {
+                    ChampionName = champion?.Name ?? $"Champion {m.ChampionId}",
+                    ChampionId = champion?.Id ?? "",
+                    ChampionIconUrl = champion != null
+                        ? $"https://ddragon.leagueoflegends.com/cdn/{patch}/img/champion/{champion.Id}.png"
+                        : "",
+                    MasteryLevel = m.ChampionLevel,
+                    MasteryPoints = m.ChampionPoints,
+                    MasteryPointsFormatted = FormatNumber(m.ChampionPoints),
+                    GamesPlayed = recentStats?.GamesPlayed ?? 0,
+                    WinRate = recentStats?.WinRate ?? 0,
+                    KdaString = recentStats?.KdaString ?? ""
+                };
+            })
+            .Where(m => !string.IsNullOrEmpty(m.ChampionId))
+            .ToList();
 
         return new PlayerProfile
         {
@@ -55,9 +91,34 @@ public class PlayerStatsService
             ProfileIconId = summoner?.ProfileIconId ?? 0,
             SummonerLevel = summoner?.SummonerLevel ?? 0,
             ProfileIconUrl = $"https://ddragon.leagueoflegends.com/cdn/{patch}/img/profileicon/{summoner?.ProfileIconId ?? 1}.png",
+            RankedStats = rankedEntries.Select(r => new RankedInfo
+            {
+                QueueType = r.QueueType,
+                QueueName = MapQueueName(r.QueueType),
+                Tier = r.Tier,
+                Rank = r.Rank,
+                LeaguePoints = r.LeaguePoints,
+                Wins = r.Wins,
+                Losses = r.Losses,
+                WinRate = (r.Wins + r.Losses) > 0 ? Math.Round((double)r.Wins / (r.Wins + r.Losses) * 100, 1) : 0,
+                TierIconUrl = $"https://raw.communitydragon.org/latest/plugins/rcp-fe-lol-static-assets/global/default/images/ranked-mini-crests/{r.Tier.ToLower()}.png"
+            }).ToList(),
             RecentMatches = recentMatches,
-            TopChampions = topChampions,
+            TopChampions = recentChampionStats,
+            TopMasteryChampions = topMasteryChampions,
             Patch = patch
+        };
+    }
+
+    private string MapQueueName(string queueType)
+    {
+        return queueType switch
+        {
+            "RANKED_SOLO_5x5" => "Ranked Solo/Duo",
+            "RANKED_FLEX_SR" => "Ranked Flex",
+            "RANKED_TFT" => "TFT",
+            "RANKED_TFT_TURBO" => "TFT Hyper Roll",
+            _ => queueType
         };
     }
 
@@ -84,8 +145,8 @@ public class PlayerStatsService
         var championId = int.Parse(champion.Key);
         var mastery = await _riotApi.GetChampionMasteryByIdAsync(account.Puuid, championId);
 
-        // Get recent matches (more for detailed view)
-        var matchIds = await _riotApi.GetMatchIdsAsync(account.Puuid, count: 50, type: null);
+        // Get extended match history for better stats
+        var matchIds = await _riotApi.GetMatchIdsPagedAsync(account.Puuid, totalCount: 200);
 
         var matches = new List<RiotMatchResponse>();
         foreach (var matchId in matchIds)
@@ -149,6 +210,7 @@ public class PlayerStatsService
             GamesPlayed = championMatches.Count,
             Wins = wins,
             Losses = losses,
+            GamesAnalysed = matches.Count,
             WinRate = championMatches.Count > 0 ? Math.Round((double)wins / championMatches.Count * 100, 1) : 0,
             AvgKills = Math.Round(avgKills, 1),
             AvgDeaths = Math.Round(avgDeaths, 1),

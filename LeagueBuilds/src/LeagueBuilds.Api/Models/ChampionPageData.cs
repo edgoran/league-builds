@@ -33,6 +33,7 @@ public class SkinInfo
 {
     public int SkinNum { get; set; }
     public string Name { get; set; } = string.Empty;
+    public bool HasChromas { get; set; }
     public string SplashUrl { get; set; } = string.Empty;
     public string LoadingUrl { get; set; } = string.Empty;
 }

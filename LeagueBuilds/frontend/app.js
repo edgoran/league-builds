@@ -155,6 +155,8 @@ async function showPlayerView(name, tag) {
         playerName.textContent = `${profile.gameName}#${profile.tagLine}`;
         playerLevel.textContent = `Level ${profile.summonerLevel}`;
 
+        renderRankedStats(profile.rankedStats);
+        renderMasteryChampions(profile.topMasteryChampions);
         renderTopChampions(profile.topChampions);
         renderMatchHistory(profile.recentMatches, matchHistory);
 
@@ -191,7 +193,7 @@ function renderTopChampions(champions) {
     topChampions.querySelectorAll(".top-champion-card").forEach(card => {
         card.addEventListener("click", () => {
             previousView = "player";
-            showChampionView(card.dataset.champion, card.dataset.id, currentPlayerName, currentPlayerTag);
+            showChampionView(card.dataset.id, card.dataset.id, currentPlayerName, currentPlayerTag);
         });
     });
 }
@@ -225,7 +227,7 @@ function renderMatchHistory(matches, container) {
     container.querySelectorAll(".match-row").forEach(row => {
         row.addEventListener("click", () => {
             previousView = "player";
-            showChampionView(row.dataset.champion, row.dataset.id, currentPlayerName, currentPlayerTag);
+            showChampionView(row.dataset.id, row.dataset.id, currentPlayerName, currentPlayerTag);
         });
     });
 }
@@ -301,6 +303,7 @@ function renderPersonalStats(stats) {
       <div class="stat-card-value">${stats.masteryPointsFormatted}</div>
       <div class="stat-card-label">Mastery (Level ${stats.masteryLevel})</div>
     </div>
+    <p class="stats-context">Based on your last ${stats.gamesAnalysed || stats.gamesPlayed} matches analysed</p>
   `;
 }
 
@@ -360,10 +363,64 @@ function renderSkins(skins) {
         <div class="skin-card">
           <img class="skin-image" src="${skin.loadingUrl}" alt="${skin.name}" loading="lazy">
           <div class="skin-name">${skin.name}</div>
+          ${skin.hasChromas ? '<div class="skin-chromas-badge">Chromas available</div>' : ''}
         </div>
       `).join("")}
     </div>
   `;
+}
+
+function renderMasteryChampions(champions) {
+    const masteryChampions = document.getElementById("mastery-champions");
+
+    if (!champions || champions.length === 0) {
+        masteryChampions.innerHTML = '<p class="no-data">No mastery data available</p>';
+        return;
+    }
+
+    // Show top 5
+    const top5 = champions.slice(0, 5);
+
+    masteryChampions.innerHTML = top5.map(champ => `
+    <div class="mastery-card" data-champion="${champ.championName}" data-id="${champ.championId}">
+      <img class="mastery-card-icon" src="${champ.championIconUrl}" alt="${champ.championName}">
+      <div class="mastery-card-name">${champ.championName}</div>
+      <div class="mastery-card-level">Mastery ${champ.masteryLevel}</div>
+      <div class="mastery-card-points">${champ.masteryPointsFormatted} pts</div>
+      ${champ.gamesPlayed > 0
+            ? `<div class="mastery-card-stats">${champ.winRate}% WR · ${champ.gamesPlayed} recent games</div>`
+            : '<div class="mastery-card-stats">No recent games</div>'
+        }
+    </div>
+  `).join("");
+
+    masteryChampions.querySelectorAll(".mastery-card").forEach(card => {
+        card.addEventListener("click", () => {
+            previousView = "player";
+            showChampionView(card.dataset.champion, card.dataset.id, currentPlayerName, currentPlayerTag);
+        });
+    });
+}
+
+function renderRankedStats(rankedStats) {
+    const rankedContainer = document.getElementById("ranked-stats");
+
+    if (!rankedStats || rankedStats.length === 0) {
+        rankedContainer.innerHTML = '<div class="ranked-card"><span class="ranked-queue">Unranked</span></div>';
+        return;
+    }
+
+    rankedContainer.innerHTML = rankedStats.map(rank => `
+    <div class="ranked-card">
+      <img class="ranked-icon" src="${rank.tierIconUrl}" alt="${rank.tier}" onerror="this.style.display='none'">
+      <div class="ranked-info">
+        <span class="ranked-queue">${rank.queueName}</span>
+        <span class="ranked-tier">${rank.tier} ${rank.rank}</span>
+        <span class="ranked-lp">${rank.leaguePoints} LP</span>
+        <span class="ranked-record">${rank.wins}W ${rank.losses}L (${rank.winRate}% WR)</span>
+      </div>
+    </div>
+  `).join("");
 }
 
 // ============================================================
