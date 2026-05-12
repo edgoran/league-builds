@@ -241,37 +241,76 @@ async function showChampionView(name, id, playerNameParam = null, playerTagParam
     championContent.classList.add("hidden");
     championError.classList.add("hidden");
 
+    // Hide personal sections initially
+    personalStatsSection.classList.add("hidden");
+    personalItemsSection.classList.add("hidden");
+    championMatchesSection.classList.add("hidden");
+
     try {
-        const data = await fetchChampionPage(name, playerNameParam, playerTagParam);
+        // Load champion info first (fast — no player data)
+        const data = await fetchChampionPage(name);
 
         championIcon.src = `https://ddragon.leagueoflegends.com/cdn/${data.patch}/img/champion/${data.championId}.png`;
         championName.textContent = `${data.championName} — ${data.title}`;
         championRoles.textContent = data.roles.join(", ");
 
-        // Personal stats
-        if (data.personalStats) {
-            renderPersonalStats(data.personalStats);
-            renderPersonalItems(data.personalStats.mostBuiltItems);
-            renderMatchHistory(data.personalStats.matchHistory, championMatches);
-            personalStatsSection.classList.remove("hidden");
-            personalItemsSection.classList.remove("hidden");
-            championMatchesSection.classList.remove("hidden");
-        } else {
-            personalStatsSection.classList.add("hidden");
-            personalItemsSection.classList.add("hidden");
-            championMatchesSection.classList.add("hidden");
-        }
-
         renderAbilities(data.abilities);
         renderLore(data.lore);
         renderSkins(data.skins);
 
+        // Show champion content immediately
         championLoading.classList.add("hidden");
         championContent.classList.remove("hidden");
+
+        // If we have player context, load personal stats separately
+        if (playerNameParam && playerTagParam) {
+            loadPersonalStats(data.championName, data.championId, playerNameParam, playerTagParam);
+        }
+
     } catch (error) {
         championLoading.classList.add("hidden");
         championError.classList.remove("hidden");
         championErrorMessage.textContent = error.message || "Failed to load champion data";
+    }
+}
+
+async function loadPersonalStats(championName, championId, playerNameParam, playerTagParam) {
+    // Show sections with loading state
+    personalStatsSection.classList.remove("hidden");
+    personalStats.innerHTML = `
+    <div class="stats-loading">
+      <div class="spinner"></div>
+      <p>Loading your stats...</p>
+    </div>
+  `;
+
+    personalItemsSection.classList.remove("hidden");
+    personalItems.innerHTML = '';
+
+    championMatchesSection.classList.remove("hidden");
+    championMatches.innerHTML = '';
+
+    try {
+        const data = await fetchChampionPage(championId, playerNameParam, playerTagParam);
+
+        if (data.personalStats) {
+            renderPersonalStats(data.personalStats);
+            renderPersonalItems(data.personalStats.mostBuiltItems);
+            renderMatchHistory(data.personalStats.matchHistory, championMatches);
+        } else {
+            personalStats.innerHTML = '<p class="no-data">No personal stats available for this champion</p>';
+            personalItemsSection.classList.add("hidden");
+            championMatchesSection.classList.add("hidden");
+        }
+    } catch (error) {
+        personalStats.innerHTML = `
+      <div class="stats-error">
+        <p>Could not load personal stats</p>
+        <button class="retry-builds-btn" onclick="loadPersonalStats('${championName}', '${championId}', '${playerNameParam}', '${playerTagParam}')">Try again</button>
+      </div>
+    `;
+        personalItemsSection.classList.add("hidden");
+        championMatchesSection.classList.add("hidden");
     }
 }
 
