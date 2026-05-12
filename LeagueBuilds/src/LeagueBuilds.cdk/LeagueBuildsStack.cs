@@ -4,14 +4,12 @@ using Amazon.CDK.AWS.Lambda;
 using Amazon.CDK.AWS.APIGateway;
 using Amazon.CDK.AWS.S3;
 using Amazon.CDK.AWS.CloudFront;
-using Amazon.CDK.AWS.CloudFront.Origins;
+using Amazon.CDK.AWS.IAM;
 using Constructs;
-using Amazon.CDK.AWS.SSM;
-
 using Attribute = Amazon.CDK.AWS.DynamoDB.Attribute;
 using Function = Amazon.CDK.AWS.Lambda.Function;
 using FunctionProps = Amazon.CDK.AWS.Lambda.FunctionProps;
-using Amazon.CDK.AWS.IAM;
+using Amazon.CDK.AWS.CloudFront.Origins;
 
 namespace LeagueBuilds.Cdk;
 
@@ -20,7 +18,7 @@ public class LeagueBuildsStack : Stack
     public LeagueBuildsStack(Construct scope, string id, IStackProps? props = null) : base(scope, id, props)
     {
         // ============================================================
-        // DynamoDB Table — Cache for champion builds
+        // DynamoDB Table — Cache
         // ============================================================
         var cacheTable = new Table(this, "LeagueBuildsCache", new TableProps
         {
@@ -35,47 +33,14 @@ public class LeagueBuildsStack : Stack
                 Name = "sk",
                 Type = AttributeType.STRING
             },
-            BillingMode = BillingMode.PAY_PER_REQUEST, // On-demand — no minimum cost
-            RemovalPolicy = RemovalPolicy.DESTROY, // Delete table when stack is destroyed
-            TimeToLiveAttribute = "ttl" // Auto-delete expired items
+            BillingMode = BillingMode.PAY_PER_REQUEST,
+            RemovalPolicy = RemovalPolicy.DESTROY,
+            TimeToLiveAttribute = "ttl"
         });
 
         // ============================================================
-        // Lambda Function — Get Champion Builds
+        // SSM Policy — Access to API key
         // ============================================================
-        var getChampionBuildsFunction = new Function(this, "GetChampionBuilds", new FunctionProps
-        {
-            FunctionName = "LeagueBuilds-GetChampionBuilds",
-            Runtime = Runtime.DOTNET_8,
-            Handler = "LeagueBuilds.Api::LeagueBuilds.Api.Functions.GetChampionBuilds::HandleAsync",
-            Code = Code.FromAsset("../LeagueBuilds.Api/bin/Release/net8.0/publish"),
-            MemorySize = 512,
-            Timeout = Duration.Seconds(30),
-            Environment = new Dictionary<string, string>
-            {
-                ["RIOT_API_KEY_PARAM"] = "/league-builds/riot-api-key",
-                ["CACHE_TABLE_NAME"] = cacheTable.TableName
-            }
-        });
-        
-        // ============================================================
-        // Lambda Function — Get Champions List
-        // ============================================================
-        var getChampionsFunction = new Function(this, "GetChampions", new FunctionProps
-        {
-            FunctionName = "LeagueBuilds-GetChampions",
-            Runtime = Runtime.DOTNET_8,
-            Handler = "LeagueBuilds.Api::LeagueBuilds.Api.Functions.GetChampions::HandleAsync",
-            Code = Code.FromAsset("../LeagueBuilds.Api/bin/Release/net8.0/publish"),
-            MemorySize = 256,
-            Timeout = Duration.Seconds(10),
-            Environment = new Dictionary<string, string>
-            {
-                ["RIOT_API_KEY_PARAM"] = "/league-builds/riot-api-key"
-            }
-        });
-
-        // Grant both Lambda functions access to read the SSM parameter
         var ssmPolicy = new PolicyStatement(new PolicyStatementProps
         {
             Effect = Effect.ALLOW,
@@ -92,11 +57,66 @@ public class LeagueBuildsStack : Stack
             }
         });
 
-        getChampionBuildsFunction.AddToRolePolicy(ssmPolicy);
+        // ============================================================
+        // Lambda Function — Get Champions List
+        // ============================================================
+        var getChampionsFunction = new Function(this, "GetChampions", new FunctionProps
+        {
+            FunctionName = "LeagueBuilds-GetChampions",
+            Runtime = Runtime.DOTNET_8,
+            Handler = "LeagueBuilds.Api::LeagueBuilds.Api.Functions.GetChampions::HandleAsync",
+            Code = Code.FromAsset("../LeagueBuilds.Api/bin/Release/net8.0/publish"),
+            MemorySize = 256,
+            Timeout = Duration.Seconds(15),
+            Environment = new Dictionary<string, string>
+            {
+                ["RIOT_API_KEY_PARAM"] = "/league-builds/riot-api-key"
+            }
+        });
+
         getChampionsFunction.AddToRolePolicy(ssmPolicy);
 
-        // Grant Lambda functions access to DynamoDB
-        cacheTable.GrantReadWriteData(getChampionBuildsFunction);
+        // ============================================================
+        // Lambda Function — Get Player Profile
+        // ============================================================
+        var getPlayerProfileFunction = new Function(this, "GetPlayerProfile", new FunctionProps
+        {
+            FunctionName = "LeagueBuilds-GetPlayerProfile",
+            Runtime = Runtime.DOTNET_8,
+            Handler = "LeagueBuilds.Api::LeagueBuilds.Api.Functions.GetPlayerProfile::HandleAsync",
+            Code = Code.FromAsset("../LeagueBuilds.Api/bin/Release/net8.0/publish"),
+            MemorySize = 512,
+            Timeout = Duration.Seconds(60),
+            Environment = new Dictionary<string, string>
+            {
+                ["RIOT_API_KEY_PARAM"] = "/league-builds/riot-api-key",
+                ["CACHE_TABLE_NAME"] = cacheTable.TableName
+            }
+        });
+
+        getPlayerProfileFunction.AddToRolePolicy(ssmPolicy);
+        cacheTable.GrantReadWriteData(getPlayerProfileFunction);
+
+        // ============================================================
+        // Lambda Function — Get Champion Page
+        // ============================================================
+        var getChampionPageFunction = new Function(this, "GetChampionPage", new FunctionProps
+        {
+            FunctionName = "LeagueBuilds-GetChampionPage",
+            Runtime = Runtime.DOTNET_8,
+            Handler = "LeagueBuilds.Api::LeagueBuilds.Api.Functions.GetChampionPage::HandleAsync",
+            Code = Code.FromAsset("../LeagueBuilds.Api/bin/Release/net8.0/publish"),
+            MemorySize = 512,
+            Timeout = Duration.Seconds(60),
+            Environment = new Dictionary<string, string>
+            {
+                ["RIOT_API_KEY_PARAM"] = "/league-builds/riot-api-key",
+                ["CACHE_TABLE_NAME"] = cacheTable.TableName
+            }
+        });
+
+        getChampionPageFunction.AddToRolePolicy(ssmPolicy);
+        cacheTable.GrantReadWriteData(getChampionPageFunction);
 
         // ============================================================
         // API Gateway — REST API
@@ -104,7 +124,7 @@ public class LeagueBuildsStack : Stack
         var api = new RestApi(this, "LeagueBuildsApi", new RestApiProps
         {
             RestApiName = "League Builds API",
-            Description = "API for League of Legends champion build data",
+            Description = "API for League of Legends player stats and champion data",
             DefaultCorsPreflightOptions = new CorsOptions
             {
                 AllowOrigins = Cors.ALL_ORIGINS,
@@ -120,7 +140,13 @@ public class LeagueBuildsStack : Stack
         // GET /champion/{name}
         var championResource = api.Root.AddResource("champion");
         var championNameResource = championResource.AddResource("{name}");
-        championNameResource.AddMethod("GET", new LambdaIntegration(getChampionBuildsFunction));
+        championNameResource.AddMethod("GET", new LambdaIntegration(getChampionPageFunction));
+
+        // GET /player/{name}/{tag}
+        var playerResource = api.Root.AddResource("player");
+        var playerNameResource = playerResource.AddResource("{name}");
+        var playerTagResource = playerNameResource.AddResource("{tag}");
+        playerTagResource.AddMethod("GET", new LambdaIntegration(getPlayerProfileFunction));
 
         // ============================================================
         // S3 Bucket — Frontend hosting
@@ -150,13 +176,13 @@ public class LeagueBuildsStack : Stack
                 {
                     HttpStatus = 404,
                     ResponseHttpStatus = 200,
-                    ResponsePagePath = "/index.html" // SPA support
+                    ResponsePagePath = "/index.html"
                 }
             }
         });
 
         // ============================================================
-        // Outputs — URLs you'll need
+        // Outputs
         // ============================================================
         new CfnOutput(this, "ApiUrl", new CfnOutputProps
         {

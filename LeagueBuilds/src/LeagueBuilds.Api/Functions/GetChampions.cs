@@ -4,6 +4,8 @@ using Amazon.Lambda.Core;
 using LeagueBuilds.Api.Models;
 using LeagueBuilds.Api.Services;
 
+[assembly: LambdaSerializer(typeof(Amazon.Lambda.Serialization.SystemTextJson.DefaultLambdaJsonSerializer))]
+
 namespace LeagueBuilds.Api.Functions;
 
 public class GetChampions

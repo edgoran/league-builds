@@ -58,7 +58,25 @@ public class RiotApiService
         return await _httpClient.GetFromJsonAsync<List<RuneTree>>(url, JsonOptions) ?? new();
     }
 
-    // Get summoner by name
+    // Get detailed champion data (includes abilities, skins)
+    public async Task<ChampionDetailResponse?> GetChampionDetailAsync(string championId, string patch)
+    {
+        var url = $"https://ddragon.leagueoflegends.com/cdn/{patch}/data/en_US/champion/{championId}.json";
+
+        Console.WriteLine($"Fetching champion detail from: {url}");
+
+        var response = await _httpClient.GetAsync(url);
+        if (!response.IsSuccessStatusCode)
+        {
+            Console.WriteLine($"Champion detail fetch failed: {response.StatusCode}");
+            return null;
+        }
+
+        var json = await response.Content.ReadAsStringAsync();
+        return JsonSerializer.Deserialize<ChampionDetailResponse>(json, JsonOptions);
+    }
+
+    // Get summoner by Riot ID
     public async Task<SummonerAccount?> GetSummonerByNameAsync(string gameName, string tagLine)
     {
         var url = $"https://{_region}.api.riotgames.com/riot/account/v1/accounts/by-riot-id/{gameName}/{tagLine}";
@@ -99,7 +117,7 @@ public class RiotApiService
         return await response.Content.ReadFromJsonAsync<RiotMatchResponse>(JsonOptions);
     }
 
-    // Get high-elo players for data collection
+    // Get Challenger players (includes PUUIDs)
     public async Task<List<LeagueEntry>> GetChallengerPlayersAsync()
     {
         var url = $"https://{_platform}.api.riotgames.com/lol/league/v4/challengerleagues/by-queue/RANKED_SOLO_5x5";
@@ -113,18 +131,78 @@ public class RiotApiService
         return league?.Entries ?? new();
     }
 
-    // Get summoner PUUID by summoner ID
-    public async Task<string?> GetPuuidBySummonerIdAsync(string summonerId)
+    // Get Grandmaster players
+    public async Task<List<LeagueEntry>> GetGrandmasterPlayersAsync()
     {
-        var url = $"https://{_platform}.api.riotgames.com/lol/summoner/v4/summoners/{summonerId}";
+        var url = $"https://{_platform}.api.riotgames.com/lol/league/v4/grandmasterleagues/by-queue/RANKED_SOLO_5x5";
+        var request = new HttpRequestMessage(HttpMethod.Get, url);
+        request.Headers.Add("X-Riot-Token", _apiKey);
+
+        var response = await _httpClient.SendAsync(request);
+        if (!response.IsSuccessStatusCode)
+        {
+            Console.WriteLine($"Grandmaster fetch failed: {response.StatusCode}");
+            return new();
+        }
+
+        var league = await response.Content.ReadFromJsonAsync<LeagueList>(JsonOptions);
+        return league?.Entries ?? new();
+    }
+
+    // Get players by rank
+    public async Task<List<LeagueEntry>> GetPlayersByRankAsync(string tier, string division, int page = 1)
+    {
+        var url = $"https://{_platform}.api.riotgames.com/lol/league/v4/entries/RANKED_SOLO_5x5/{tier}/{division}?page={page}";
+        var request = new HttpRequestMessage(HttpMethod.Get, url);
+        request.Headers.Add("X-Riot-Token", _apiKey);
+
+        var response = await _httpClient.SendAsync(request);
+        if (!response.IsSuccessStatusCode)
+        {
+            Console.WriteLine($"Rank fetch failed for {tier} {division}: {response.StatusCode}");
+            return new();
+        }
+
+        return await response.Content.ReadFromJsonAsync<List<LeagueEntry>>(JsonOptions) ?? new();
+    }
+
+    // Get summoner info by PUUID (for profile icon, level)
+    public async Task<SummonerInfo?> GetSummonerByPuuidAsync(string puuid)
+    {
+        var url = $"https://{_platform}.api.riotgames.com/lol/summoner/v4/summoners/by-puuid/{puuid}";
         var request = new HttpRequestMessage(HttpMethod.Get, url);
         request.Headers.Add("X-Riot-Token", _apiKey);
 
         var response = await _httpClient.SendAsync(request);
         if (!response.IsSuccessStatusCode) return null;
 
-        var summoner = await response.Content.ReadFromJsonAsync<SummonerResponse>(JsonOptions);
-        return summoner?.Puuid;
+        return await response.Content.ReadFromJsonAsync<SummonerInfo>(JsonOptions);
+    }
+
+    // Get champion mastery for a player
+    public async Task<List<ChampionMastery>> GetChampionMasteryAsync(string puuid)
+    {
+        var url = $"https://{_platform}.api.riotgames.com/lol/champion-mastery/v4/champion-masteries/by-puuid/{puuid}/top?count=10";
+        var request = new HttpRequestMessage(HttpMethod.Get, url);
+        request.Headers.Add("X-Riot-Token", _apiKey);
+
+        var response = await _httpClient.SendAsync(request);
+        if (!response.IsSuccessStatusCode) return new();
+
+        return await response.Content.ReadFromJsonAsync<List<ChampionMastery>>(JsonOptions) ?? new();
+    }
+
+    // Get single champion mastery
+    public async Task<ChampionMastery?> GetChampionMasteryByIdAsync(string puuid, int championId)
+    {
+        var url = $"https://{_platform}.api.riotgames.com/lol/champion-mastery/v4/champion-masteries/by-puuid/{puuid}/by-champion/{championId}";
+        var request = new HttpRequestMessage(HttpMethod.Get, url);
+        request.Headers.Add("X-Riot-Token", _apiKey);
+
+        var response = await _httpClient.SendAsync(request);
+        if (!response.IsSuccessStatusCode) return null;
+
+        return await response.Content.ReadFromJsonAsync<ChampionMastery>(JsonOptions);
     }
 }
 
@@ -153,6 +231,7 @@ public class ItemInfo
     public string Description { get; set; } = string.Empty;
     public ImageInfo Image { get; set; } = new();
     public GoldInfo Gold { get; set; } = new();
+    public List<string> Tags { get; set; } = new();
 }
 
 public class GoldInfo
@@ -185,6 +264,76 @@ public class RuneInfo
     public string Name { get; set; } = string.Empty;
 }
 
+// Detailed champion data from Data Dragon
+public class ChampionDetailResponse
+{
+    public Dictionary<string, ChampionDetail> Data { get; set; } = new();
+}
+
+public class ChampionDetail
+{
+    public string Id { get; set; } = string.Empty;
+    public string Key { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public string Lore { get; set; } = string.Empty;
+    public List<string> Tags { get; set; } = new();
+    public ChampionDetailInfo Info { get; set; } = new();
+    public ChampionPassive Passive { get; set; } = new();
+    public List<ChampionSpell> Spells { get; set; } = new();
+    public List<ChampionSkin> Skins { get; set; } = new();
+    public List<ChampionRecommended> Recommended { get; set; } = new();
+}
+
+public class ChampionDetailInfo
+{
+    public int Attack { get; set; }
+    public int Defense { get; set; }
+    public int Magic { get; set; }
+    public int Difficulty { get; set; }
+}
+
+public class ChampionPassive
+{
+    public string Name { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public ImageInfo Image { get; set; } = new();
+}
+
+public class ChampionSpell
+{
+    public string Id { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string Description { get; set; } = string.Empty;
+    public ImageInfo Image { get; set; } = new();
+}
+
+public class ChampionSkin
+{
+    public int Num { get; set; }
+    public string Name { get; set; } = string.Empty;
+}
+
+public class ChampionRecommended
+{
+    public string Map { get; set; } = string.Empty;
+    public string Mode { get; set; } = string.Empty;
+    public string Type { get; set; } = string.Empty;
+    public List<ChampionRecommendedBlock> Blocks { get; set; } = new();
+}
+
+public class ChampionRecommendedBlock
+{
+    public string Type { get; set; } = string.Empty;
+    public List<ChampionRecommendedItem> Items { get; set; } = new();
+}
+
+public class ChampionRecommendedItem
+{
+    public string Id { get; set; } = string.Empty;
+    public int Count { get; set; }
+}
+
 // Riot API response models
 public class RiotMatchResponse
 {
@@ -201,7 +350,9 @@ public class MatchMetadata
 public class MatchInfo
 {
     public long GameDuration { get; set; }
+    public long GameCreation { get; set; }
     public string GameVersion { get; set; } = string.Empty;
+    public string GameMode { get; set; } = string.Empty;
     public List<MatchParticipant> Participants { get; set; } = new();
 }
 
@@ -221,6 +372,11 @@ public class MatchParticipant
     public int Item6 { get; set; }
     public int Summoner1Id { get; set; }
     public int Summoner2Id { get; set; }
+    public int Kills { get; set; }
+    public int Deaths { get; set; }
+    public int Assists { get; set; }
+    public int TotalMinionsKilled { get; set; }
+    public int NeutralMinionsKilled { get; set; }
     public MatchPerks Perks { get; set; } = new();
 }
 
@@ -248,12 +404,6 @@ public class SummonerAccount
     public string TagLine { get; set; } = string.Empty;
 }
 
-public class SummonerResponse
-{
-    public string Puuid { get; set; } = string.Empty;
-    public string Name { get; set; } = string.Empty;
-}
-
 public class LeagueList
 {
     public List<LeagueEntry> Entries { get; set; } = new();
@@ -263,5 +413,23 @@ public class LeagueEntry
 {
     public string SummonerId { get; set; } = string.Empty;
     public string SummonerName { get; set; } = string.Empty;
+    public string Puuid { get; set; } = string.Empty;
     public int LeaguePoints { get; set; }
+    public int Wins { get; set; }
+    public int Losses { get; set; }
+}
+
+public class SummonerInfo
+{
+    public string Puuid { get; set; } = string.Empty;
+    public int ProfileIconId { get; set; }
+    public long SummonerLevel { get; set; }
+}
+
+public class ChampionMastery
+{
+    public string Puuid { get; set; } = string.Empty;
+    public int ChampionId { get; set; }
+    public int ChampionLevel { get; set; }
+    public int ChampionPoints { get; set; }
 }

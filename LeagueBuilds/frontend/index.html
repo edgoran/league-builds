@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>League Stats</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="app">
+        <header class="header">
+            <div class="header-content">
+                <h1 class="logo" id="logo">⚔️ League Stats</h1>
+                <span class="patch-badge" id="patch-badge"></span>
+            </div>
+        </header>
+
+        <main class="main">
+
+            <!-- View 1: Search / Home -->
+            <div id="search-view" class="view">
+                <div class="search-section">
+                    <h2 class="search-title">Look up a player</h2>
+                    <div class="player-search">
+                        <input type="text" id="player-name-input" class="search-input player-input" placeholder="Game Name" autocomplete="off">
+                        <span class="search-hash">#</span>
+                        <input type="text" id="player-tag-input" class="search-input tag-input" placeholder="Tag" autocomplete="off">
+                        <button id="search-button" class="search-button">Search</button>
+                    </div>
+                    <div id="search-error" class="search-error hidden"></div>
+                </div>
+
+                <div class="divider"></div>
+
+                <div class="champions-section">
+                    <h2 class="section-heading">Champions</h2>
+                    <input type="text" id="champion-filter" class="search-input" placeholder="Filter champions...">
+                    <div id="champion-grid" class="champion-grid"></div>
+                    <div id="loading-champions" class="loading">
+                        <div class="spinner"></div>
+                        <p>Loading champions...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- View 2: Player Profile -->
+            <div id="player-view" class="view hidden">
+                <button id="player-back-button" class="back-button">← Back to search</button>
+
+                <div id="player-loading" class="loading">
+                    <div class="spinner"></div>
+                    <p>Loading player data...</p>
+                    <p class="loading-sub">Fetching match history</p>
+                </div>
+
+                <div id="player-content" class="hidden">
+                    <div class="player-header">
+                        <img id="player-icon" class="player-icon" src="" alt="">
+                        <div class="player-info">
+                            <h2 id="player-name" class="player-name"></h2>
+                            <span id="player-level" class="player-level"></span>
+                        </div>
+                    </div>
+
+                    <section class="profile-section">
+                        <h3 class="section-title">Your Champions</h3>
+                        <div id="top-champions" class="top-champions-grid"></div>
+                    </section>
+
+                    <section class="profile-section">
+                        <h3 class="section-title">Recent Matches</h3>
+                        <div id="match-history" class="match-history"></div>
+                    </section>
+                </div>
+
+                <div id="player-error" class="error-state hidden">
+                    <p class="error-message" id="player-error-message"></p>
+                    <button class="retry-button" id="player-retry-button">Try again</button>
+                </div>
+            </div>
+
+            <!-- View 3: Champion Page -->
+            <div id="champion-view" class="view hidden">
+                <button id="champion-back-button" class="back-button">← Back</button>
+
+                <div id="champion-loading" class="loading">
+                    <div class="spinner"></div>
+                    <p>Loading champion data...</p>
+                </div>
+
+                <div id="champion-content" class="hidden">
+                    <div class="champion-header">
+                        <img id="champion-icon" class="champion-icon" src="" alt="">
+                        <div class="champion-info">
+                            <h2 id="champion-name" class="champion-name"></h2>
+                            <span id="champion-roles" class="champion-roles"></span>
+                        </div>
+                    </div>
+
+                    <!-- Personal Stats (shown if coming from player profile) -->
+                    <section id="personal-stats-section" class="profile-section hidden">
+                        <h3 class="section-title">Your Stats</h3>
+                        <div id="personal-stats" class="personal-stats"></div>
+                    </section>
+
+                    <!-- Most Built Items (shown if personal stats available) -->
+                    <section id="personal-items-section" class="profile-section hidden">
+                        <h3 class="section-title">Your Most Built Items</h3>
+                        <div id="personal-items" class="build-items"></div>
+                    </section>
+
+                    <!-- Abilities -->
+                    <section class="profile-section">
+                        <h3 class="section-title">Abilities</h3>
+                        <div id="champion-abilities" class="abilities-list"></div>
+                    </section>
+
+                    <!-- Lore -->
+                    <section class="profile-section">
+                        <h3 class="section-title">Lore</h3>
+                        <div id="champion-lore" class="lore-section"></div>
+                    </section>
+
+                    <!-- Skins -->
+                    <section class="profile-section">
+                        <h3 class="section-title">Skins</h3>
+                        <div id="champion-skins" class="skins-list"></div>
+                    </section>
+
+                    <!-- Match History with Champion (shown if personal stats) -->
+                    <section id="champion-matches-section" class="profile-section hidden">
+                        <h3 class="section-title">Your Match History</h3>
+                        <div id="champion-matches" class="match-history"></div>
+                    </section>
+                </div>
+
+                <div id="champion-error" class="error-state hidden">
+                    <p class="error-message" id="champion-error-message"></p>
+                    <button class="retry-button" id="champion-retry-button">Try again</button>
+                </div>
+            </div>
+
+        </main>
+
+        <footer class="footer">
+            <p>Data sourced from the Riot Games API</p>
+            <p class="disclaimer">League Stats is not endorsed by Riot Games</p>
+        </footer>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
